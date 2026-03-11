@@ -2,6 +2,7 @@
 __pycache__
 .algorithm_coverage
 .coverage
+.pytest_cache
 
 # Binaries for programs and plugins
 *.exe
