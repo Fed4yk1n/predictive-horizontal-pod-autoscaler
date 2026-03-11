@@ -93,6 +93,15 @@ spec:
 This PHPA acts like a Horizontal Pod Autoscaler and autoscales to try and keep the target resource's CPU utilization at
 50%, but with the extra predictive layer of a linear regression model applied to the results.
 
+## Prerequisites
+
+To deploy PHPAs to a Kubernetes cluster you need:
+
+* [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) >= `v1.23`
+* [Helm](https://helm.sh/docs/intro/install/) >= `v3`
+* A running Kubernetes cluster (>= `v1.23`) with the [metrics server](https://github.com/kubernetes-sigs/metrics-server)
+  enabled. For local development you can use [k3d](https://k3d.io/) or [minikube](https://minikube.sigs.k8s.io/).
+
 ## Installation
 
 The operator for managing Predictive Horizontal Pod Autoscalers can be installed using Helm:
@@ -103,11 +112,61 @@ HELM_CHART=predictive-horizontal-pod-autoscaler-operator
 helm install ${HELM_CHART} https://github.com/jthomperoo/predictive-horizontal-pod-autoscaler/releases/download/${VERSION}/predictive-horizontal-pod-autoscaler-${VERSION}.tgz
 ```
 
+Verify the operator is running:
+
+```bash
+helm status predictive-horizontal-pod-autoscaler-operator
+```
+
 ## Quick start
 
-Check out the [getting started
-guide](https://predictive-horizontal-pod-autoscaler.readthedocs.io/en/latest/user-guide/getting-started/) and the
-[examples](./examples/) for ways to use Predictive Horizontal Pod Autoscalers.
+Once the operator is installed, you can deploy a sample workload and autoscaler to see it in action.
+
+### 1. Deploy a test application
+
+```bash
+kubectl apply -f examples/simple-linear/deployment.yaml
+```
+
+### 2. Deploy a Predictive Horizontal Pod Autoscaler
+
+```bash
+kubectl apply -f examples/simple-linear/phpa.yaml
+```
+
+### 3. Verify the autoscaler is running
+
+```bash
+kubectl get phpa simple-linear
+```
+
+### 4. Watch the operator logs
+
+```bash
+kubectl logs -l name=predictive-horizontal-pod-autoscaler -f
+```
+
+### 5. Generate load to trigger autoscaling
+
+In a separate terminal, start a load generator:
+
+```bash
+kubectl run -it --rm load-generator --image=busybox -- /bin/sh -c "while true; do wget -q -O- http://php-apache.default.svc.cluster.local; done"
+```
+
+You should see the number of replicas increase in the operator logs. Stop the load generator with `Ctrl+C` and the
+replicas will scale back down.
+
+### 6. Clean up
+
+```bash
+kubectl delete -f examples/simple-linear/phpa.yaml
+kubectl delete -f examples/simple-linear/deployment.yaml
+```
+
+For a detailed walkthrough, see the [getting started
+guide](https://predictive-horizontal-pod-autoscaler.readthedocs.io/en/latest/user-guide/getting-started/). More
+examples are available in the [`examples/` directory](./examples).
 
 ## More information
 
@@ -118,32 +177,41 @@ See the [`examples/` directory](./examples) for working code samples.
 
 ## Developing this project
 
-Developing this project requires these dependencies:
+### Dependencies
 
 * [Go](https://golang.org/doc/install) >= `1.20`
 * [Python](https://www.python.org/downloads/) == `3.8.x`
 * [Helm](https://helm.sh/) == `3.9.x`
+* A running Kubernetes cluster configured via `kubeconfig` (e.g. [k3d](https://k3d.io/))
 
-Any Python dependencies must be installed by running:
+### Getting started
+
+Install Python dependencies:
 
 ```bash
 pip install -r requirements-dev.txt
 ```
 
-This extensively uses the the [jthomperoo/k8shorizmetrics](https://github.com/jthomperoo/k8shorizmetrics) library
+Run the operator locally against the cluster configured in your kubeconfig:
+
+```bash
+make run
+```
+
+This uses [Air](https://github.com/cosmtrek/air) for live-reloading. The operator connects to the cluster in your
+current kubeconfig context and will manage any PHPA resources on that cluster.
+
+You can then deploy a PHPA example (see the [`examples/` directory](./examples) for choices) to test your changes.
+
+This project extensively uses the [jthomperoo/k8shorizmetrics](https://github.com/jthomperoo/k8shorizmetrics) library
 to gather metrics and to evaluate them as the Kubernetes Horizontal Pod Autoscaler does.
-
-It is recommended to test locally using a local Kubernetes managment system, such as
-[k3d](https://github.com/rancher/k3d) (allows running a small Kubernetes cluster locally using Docker).
-
-You can deploy a PHPA example (see the [`examples/` directory](./examples) for choices) to test your changes.
 
 ### Commands
 
 * `make run` - runs the PHPA locally against the cluster configured in your kubeconfig file.
-* `make docker` - builds the PHPA image.
+* `make docker` - builds the PHPA Docker image.
+* `make test` - runs the unit tests (Go and Python).
 * `make lint` - lints the code.
-* `make format` - beautifies the code, must be run to pass the CI.
-* `make test` - runs the unit tests.
+* `make format` - formats the code, must be run to pass the CI.
 * `make doc` - hosts the documentation locally at <https://localhost:8000>.
 * `make coverage` - opens up any generated coverage reports in the browser.
